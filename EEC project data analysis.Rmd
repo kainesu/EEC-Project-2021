@@ -1,0 +1,93 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Call libraries
+```{r}
+# install tidyverse and GGally using install.packages()
+library(tidyverse)
+library(GGally)
+```
+
+# Load file
+```{r}
+emissions_data <- read.csv("your file.csv")
+```
+
+# Create pairwise plots
+```{r}
+## Create an unstacked data set for all emissions (how to loop this?)
+ICAO_emissions <- (subset(emissions_data, calculator=="ICAO"))$emissions
+atmosfair_emissions <- (subset(emissions_data, calculator=="atmosfair"))$emissions
+offsetters_emissions <- (subset(emissions_data, calculator=="offsetters"))$emissions
+## add more subsets as needed 
+emissions_unstacked <- tibble(ICAO_emissions,atmosfair_emissions,offsetters_emissions) # add on other columns as needed 
+pairs(emissions_unstacked)
+
+# Add 1:1 line. 
+# Figure out how to make this into a loop.
+# Figure out how to colour the points by distance. (e.g. long routes = red, med routes = yellow)
+ICAO_atmosfair <- ggplot(data=emissions_unstacked, mapping=aes(x=ICAO_emissions,y=atmosfair_emissions)) + geom_point()
+ICAO_atmosfair + geom_abline(intercept = 0, slope = 1)
+
+ICAO_offsetters <- ggplot(data=emissions_unstacked, mapping=aes(x=ICAO_emissions,y=offsetters_emissions)) + geom_point()
+ICAO_offsetters + geom_abline(intercept = 0, slope = 1)
+
+atmosfair_offsetters <- ggplot(data=emissions_unstacked, mapping=aes(x=atmosfair_emissions,y=offsetters_emissions)) + geom_point()
+atmosfair_offsetters + geom_abline(intercept = 0, slope = 1)
+
+# Add on more calculators as needed. 
+```
+
+# ANOVA
+```{r}
+boxplot(emissions ~ calculator, data=emissions_data)
+calculator.lm <- lm(emissions ~ calculator, data=emissions_data)
+anova(calculator.lm)
+kruskal.test(emissions ~ calculator, data=emissions_data)
+par(mfrow=c(2,2))
+plot(calculator.lm)
+TukeyHSD(aov(calculator.lm))
+```
+
+# Plot emissions against distance for each calculator
+```{r}
+emissions_data_distance_calculator_emissions <- select(emissions_data,contains(c("distance","calculator","emissions")))
+ggplot(data=real_df_reduced, aes(x=distance,y=emissions,colour=calculator)) + geom_point() + geom_smooth()
+```
+
+# Repeating ANOVA, but within each distance category
+```{r}
+distcatdf <- select(emissions_data,contains(c("distance","calculator","emissions","distcat")))
+
+longroutes <- distcat_df[1:18,] # change the row index numbers to get all longroutes, medroutes, shortroutes 
+medroutes <- distcat_df[19:36,]
+shortroutes <- distcat_df[37:57,]
+routescatlist <- list(longroutes, medroutes, shortroutes)
+
+for (i in routescatlist) {
+  boxplot(emissions ~ calculator, data=i)
+  ilm <- lm(emissions ~ calculator, data=i)
+  par(mfrow=c(2,2))
+  plot(ilm)
+}
+
+longroutes.lm <- lm(emissions~calculator, data=longroutes)
+medroutes.lm <- lm(emissions~calculator, data=medroutes)
+shortroutes.lm <- lm(emissions~calculator, data=shortroutes)
+
+anova(longroutes.lm)
+anova(medroutes.lm)
+anova(shortroutes.lm)
+
+kruskal.test(emissions ~ calculator, data=longroutes)
+kruskal.test(emissions ~ calculator, data=medroutes)
+kruskal.test(emissions ~ calculator, data=shortroutes)
+
+TukeyHSD(aov(longroutes.lm))
+TukeyHSD(aov(medroutes.lm))
+TukeyHSD(aov(shortroutes.lm))
+```
+
+
