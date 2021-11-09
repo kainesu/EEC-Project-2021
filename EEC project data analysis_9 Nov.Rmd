@@ -1,0 +1,120 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Call libraries
+```{r}
+# install tidyverse and GGally using install.packages()
+library(tidyverse)
+library(GGally)
+library(ggsignif)
+```
+
+# Load file
+```{r}
+emissions_data <- read.csv("Flights with distance and emissions.csv")
+```
+
+# Create pairwise plots
+```{r}
+calculators_list <- c("ICAO","climate.care","atmosfair","offsetters","carbon.footprint","c.level","british.airways","singapore.airlines","co2.logic","myclimate","terrapass")
+emissions_only <- emissions_data[calculators_list]
+pairs(emissions_only)
+```
+
+**Only run this once!!**
+```{r}
+# Create pairs to generate plots for 
+pairs_of_calculators = combn(calculators_list[1:11],2,simplify=FALSE)
+pairwise_plot_list = list()
+
+# Make plots
+for (i in 1:55) {
+   p = ggplot(emissions_only, aes_string(x=pairs_of_calculators[[i]][1], y=pairs_of_calculators[[i]][2])) + geom_point(size=3) + geom_abline(intercept = 0, slope = 1)
+    pairwise_plot_list[[i]] = p
+}
+
+# Save plots
+for (i in 1:55) {
+    file_name = paste("calculator_plot_", i, ".tiff", sep="")
+    tiff(file_name)
+    print(pairwise_plot_list[[i]])
+    dev.off()
+}
+```
+
+# ANOVA
+```{r}
+# stack the table
+emissions_only <- emissions_data[calculators_list]
+emissions_only_stacked <- stack(emissions_only)
+colnames(emissions_only_stacked) <- c("emissions","calculator")
+
+# boxplot
+boxplot(emissions ~ calculator, data=emissions_only_stacked, main="Emissions output for each calculator",las=2,xlab="") # using base R
+
+ggplot(data=emissions_only_stacked,aes(x=calculator, y=emissions, color=calculator)) + 
+  geom_boxplot() + 
+  geom_signif(comparisons=list(c("ICAO","atmosfair"),c("british.airways","atmosfair"),c("singapore.airlines","atmosfair")),map_signif_level=TRUE) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# anova test
+calculator.lm <- lm(emissions ~ calculator, data=emissions_only_stacked)
+anova(calculator.lm)
+kruskal.test(emissions ~ calculator, data=emissions_only_stacked)
+par(mfrow=c(2,2))
+plot(calculator.lm)
+TukeyHSD(aov(calculator.lm))
+```
+
+# Plot emissions against distance for each calculator
+```{r}
+# Select data and stack table
+distances <- emissions_data["distance"]
+emissions_data_distance_calculator_emissions <- cbind(emissions_only_stacked, distances) 
+
+# Generate plot
+ggplot(data=emissions_data_distance_calculator_emissions, aes(x=distance,y=emissions,colour=calculator)) + geom_point() + geom_smooth()
+```
+
+# Repeating ANOVA, but within each distance category
+```{r}
+# At this point, it is easier to just re-enter the distance categories for the stacked table by exporting it to csv and using =IF(). Then read in the new csv. 
+emissions_with_distcat <- read.csv("emissions_with_distcat.csv")
+
+# Find a way to loop these!
+longroutes <- filter(emissions_with_distcat, distcat=="long") 
+medroutes <- filter(emissions_with_distcat, distcat=="medium") 
+shortroutes <- filter(emissions_with_distcat, distcat=="short") 
+routescatlist <- list(longroutes, medroutes, shortroutes)
+
+boxplot(emissions ~ calculator, data=longroutes, main="long routes",las=2,xlab="")
+boxplot(emissions ~ calculator, data=medroutes, main="medium routes",las=2,xlab="")
+boxplot(emissions ~ calculator, data=shortroutes, main="short routes",las=2,xlab="")
+
+for (i in routescatlist) {
+  ilm <- lm(emissions ~ calculator, data=i)
+  par(mfrow=c(2,2))
+  plot(ilm)
+}
+
+longroutes.lm <- lm(emissions~calculator, data=longroutes)
+medroutes.lm <- lm(emissions~calculator, data=medroutes)
+shortroutes.lm <- lm(emissions~calculator, data=shortroutes)
+
+anova(longroutes.lm)
+anova(medroutes.lm)
+anova(shortroutes.lm)
+
+kruskal.test(emissions ~ calculator, data=longroutes)
+kruskal.test(emissions ~ calculator, data=medroutes)
+kruskal.test(emissions ~ calculator, data=shortroutes)
+
+TukeyHSD(aov(longroutes.lm))
+TukeyHSD(aov(medroutes.lm))
+TukeyHSD(aov(shortroutes.lm))
+```
+
